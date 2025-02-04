@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from options import MVS2DOptions, EvalCfg
 import networks
+import time
 
 
 def load_data(args):
@@ -58,14 +59,22 @@ opts.num_frame = 3
 opts.width = int(640)
 opts.height = int(480)
 model = networks.MVS2D(opt=opts, pretrained=False).cuda()
-pretrained_dict = torch.load("./pretrained_model/scannet/MVS2D/model.pth")
+pretrained_dict = torch.load("/media/hao/work/model/depth/3DReconstruct/MVS2D_ScanNet_pretrained/pretrained_model/scannet/MVS2D/model.pth")
 model.load_state_dict(pretrained_dict)
 model.eval()
 
 with torch.no_grad():
     imgs, proj_mats, inv_K_pool, depths = load_data(opts)
-    assert (len(imgs) == opts.num_frame)
-    outputs = model(imgs[0], imgs[1:], proj_mats[0], proj_mats[1:], inv_K_pool)
+    for i in range(10):
+        start_time = time.time()
+
+        # 3 views
+        outputs = model(imgs[0], imgs[1:], proj_mats[0], proj_mats[1:], inv_K_pool)
+        # 2 views
+        # outputs = model(imgs[0], imgs[1:2], proj_mats[0], proj_mats[1:2], inv_K_pool)
+        # 1 view
+        # outputs = model(imgs[0], imgs[0:1], proj_mats[0], proj_mats[0:1], inv_K_pool)
+        print(f"Execution time: {(time.time() - start_time) * 1000:.2f} ms")
 
     fig = plt.figure()
     ax1 = fig.add_subplot(1, 5, 1)
