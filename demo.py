@@ -58,8 +58,9 @@ opts = options.parse()
 opts.num_frame = 3
 opts.width = int(640)
 opts.height = int(480)
-model = networks.MVS2D(opt=opts, pretrained=False).cuda()
-pretrained_dict = torch.load("/media/hao/work/model/depth/3DReconstruct/MVS2D_ScanNet_pretrained/pretrained_model/scannet/MVS2D/model.pth")
+model = networks.MVS2D(opt=opts).cuda()
+pretrained_file = opts.load_weights_folder + '/model.pth' if not opts.robust else opts.load_weights_folder + '/model_robust.pth'
+pretrained_dict = torch.load(pretrained_file, weights_only=True)
 model.load_state_dict(pretrained_dict)
 model.eval()
 
