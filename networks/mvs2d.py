@@ -8,6 +8,7 @@ import numpy as np
 import torchvision.models as models
 from utils import *
 from .module import UNet
+from utils_torch import parameters_count
 
 
 class MVS2D(nn.Module):
@@ -300,6 +301,12 @@ class MVS2D(nn.Module):
 
                 sz_ref = (ref_feature.shape[2], ref_feature.shape[3])
                 sz_src = (src_features[0].shape[2], src_features[0].shape[3])
+
+                sz_ref = (int(sz_ref[0].item()) if isinstance(sz_ref[0], torch.Tensor) else sz_ref[0],
+                          int(sz_ref[1].item()) if isinstance(sz_ref[1], torch.Tensor) else sz_ref[1])
+                sz_src = (int(sz_src[0].item()) if isinstance(sz_src[0], torch.Tensor) else sz_src[0],
+                          int(sz_src[1].item()) if isinstance(sz_src[1], torch.Tensor) else sz_src[1])
+
                 linear_out3 = self.layers[('linear_out3', k)]
                 att_f = self.epipolar_fusion(
                     ref_feature,
