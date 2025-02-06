@@ -167,7 +167,7 @@ class WarpPoseModel(torch.nn.Module):
         inv_K_pool = {k: torch.tensor(v).unsqueeze(0).cuda() for k, v in inv_K_pool.items()}
         proj_mats = [{k: torch.tensor(v).unsqueeze(0).cuda() for k, v in pm.items()} for pm in proj_mats]
 
-        outputs = self.model(image, [image, image, ], proj_mats[0], proj_mats[1:], inv_K_pool)
+        outputs = self.model.forward_test(image, [image, image, ], proj_mats[0], proj_mats[1:])
         depth_pred = outputs[('depth_pred', 0)][0, 0]
         return depth_pred
 

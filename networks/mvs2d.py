@@ -175,8 +175,8 @@ class MVS2D(nn.Module):
         param = 0
         for key in self.layers.keys():
             if key[0] in [
-                    'key', 'pos_embed', 'query', 'm_embed', 'linear_out',
-                    'linear_out2', 'linear_out3'
+                'key', 'pos_embed', 'query', 'm_embed', 'linear_out',
+                'linear_out2', 'linear_out3'
             ]:
                 param += parameters_count(self.layers[key],
                                           key,
@@ -200,15 +200,15 @@ class MVS2D(nn.Module):
         return F.interpolate(x, scale_factor=scale_factor, mode="nearest")
 
     def epipolar_fusion(
-        self,
-        ref_feature,
-        src_features,
-        ref_proj,
-        src_projs,
-        depth_values,
-        layer,
-        ref_img,
-        src_imgs,
+            self,
+            ref_feature,
+            src_features,
+            ref_proj,
+            src_projs,
+            depth_values,
+            layer,
+            ref_img,
+            src_imgs,
     ):
         query = self.layers[('query', layer)]
         m_embed = self.layers[('m_embed', layer)]
@@ -270,12 +270,11 @@ class MVS2D(nn.Module):
         return d
 
     def forward(
-        self,
-        ref_img,
-        src_imgs,
-        ref_proj,
-        src_projs,
-        inv_K,
+            self,
+            ref_img,
+            src_imgs,
+            ref_proj,
+            src_projs,
     ):
         outputs = {}
         ref_feature = ref_img
@@ -339,9 +338,9 @@ class MVS2D(nn.Module):
         ## upsample depth map into input resolution
         depth_pred = self.upsample(
             depth_pred, scale_factor=4) + 1e-1 * self.conv_up(
-                torch.cat((depth_pred, self.meshgrid.unsqueeze(0).repeat(
-                    depth_pred.shape[0], 1, 1,
-                    1).to(depth_pred), feature_map_d), 1))
+            torch.cat((depth_pred, self.meshgrid.unsqueeze(0).repeat(
+                depth_pred.shape[0], 1, 1,
+                1).to(depth_pred), feature_map_d), 1))
         if self.opt.pred_conf:
             outputs[('log_conf_pred',
                      0)] = F.interpolate(outputs[('log_conf_pred',
@@ -350,6 +349,91 @@ class MVS2D(nn.Module):
             outputs[('log_conf_pred', 0)] = F.interpolate(
                 outputs[('log_conf_pred', self.opt.output_scale)],
                 size=(self.opt.height, self.opt.width))
+        outputs[('depth_pred', 0)] = depth_pred
+
+        return outputs
+
+    def forward_test(
+            self,
+            ref_img,
+            src_imgs,
+            ref_proj,
+            src_projs,
+    ):
+        outputs = {}
+        ref_feature = ref_img
+        src_features = [x for x in src_imgs]
+        V = len(src_imgs) + 1
+        ref_feature2 = ref_img
+        ref_skip_feat2 = []
+        cnt = 0
+        ## pass through encoder, and integrate multi-view attention
+        for k, v in self.base_model2._modules.items():
+            if 'fc' in k or 'avgpool' in k:
+                continue
+            if cnt < len(self.attn_layers):
+                ref_feature = getattr(self.base_model, k)(ref_feature)
+                for i in range(V - 1):
+                    src_features[i] = getattr(self.base_model,
+                                              k)(src_features[i])
+            ref_feature2 = v(ref_feature2)
+            if k in self.attn_layers:
+                b = ref_img.shape[0]
+                depth_values = self.depth_values[None, :, None, None].repeat(
+                    b, 1, ref_feature.shape[2], ref_feature.shape[3])
+
+                sz_ref = (ref_feature.shape[2], ref_feature.shape[3])
+                sz_src = (src_features[0].shape[2], src_features[0].shape[3])
+
+                sz_ref = (int(sz_ref[0].item()) if isinstance(sz_ref[0], torch.Tensor) else sz_ref[0],
+                          int(sz_ref[1].item()) if isinstance(sz_ref[1], torch.Tensor) else sz_ref[1])
+                sz_src = (int(sz_src[0].item()) if isinstance(sz_src[0], torch.Tensor) else sz_src[0],
+                          int(sz_src[1].item()) if isinstance(sz_src[1], torch.Tensor) else sz_src[1])
+
+                linear_out3 = self.layers[('linear_out3', k)]
+                att_f = self.epipolar_fusion(
+                    ref_feature,
+                    src_features,
+                    ref_proj[sz_ref],
+                    [proj[sz_src] for proj in src_projs],
+                    depth_values,
+                    k,
+                    ref_img,
+                    src_imgs,
+                )
+                ref_feature2 = ref_feature2 + linear_out3(ref_feature2) + att_f
+                cnt += 1
+
+            if any(x in k for x in self.feat_names):
+                ref_skip_feat2.append(ref_feature2)
+
+        ## decode into depth map of 1/4 input resolution
+        ref_feature = ref_skip_feat2
+        x = ref_feature[-1]
+        for i in range(4, self.output_layer, -1):
+            x = self.layers[("upconv", i, 0)](x)
+
+            outputs[('depth_pred', 0)] = x
+            return outputs
+            if i >= 2 - self.opt.input_scale:
+                x = self.upsample(x)
+                x = torch.cat((x, ref_feature[i - 1]), 1)
+                x = self.layers[("upconv", i, 1)](x)
+            else:
+                break
+
+        feature_map = x
+
+        feature_map_d = self.conv_out(feature_map)
+        depth_pred = self.regress_depth(feature_map_d)
+
+        ## upsample depth map into input resolution
+        depth_pred = self.upsample(
+            depth_pred, scale_factor=4) + 1e-1 * self.conv_up(
+            torch.cat((depth_pred, self.meshgrid.unsqueeze(0).repeat(
+                depth_pred.shape[0], 1, 1,
+                1).to(depth_pred), feature_map_d), 1))
+
         outputs[('depth_pred', 0)] = depth_pred
 
         return outputs

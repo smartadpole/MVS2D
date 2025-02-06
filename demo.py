@@ -70,11 +70,11 @@ with torch.no_grad():
         start_time = time.time()
 
         # 3 views
-        outputs = model(imgs[0], imgs[1:], proj_mats[0], proj_mats[1:], inv_K_pool)
+        outputs = model(imgs[0], imgs[1:], proj_mats[0], proj_mats[1:])
         # 2 views
-        # outputs = model(imgs[0], imgs[1:2], proj_mats[0], proj_mats[1:2], inv_K_pool)
+        # outputs = model(imgs[0], imgs[1:2], proj_mats[0], proj_mats[1:2])
         # 1 view
-        # outputs = model(imgs[0], imgs[0:1], proj_mats[0], proj_mats[0:1], inv_K_pool)
+        # outputs = model(imgs[0], imgs[0:1], proj_mats[0], proj_mats[0:1])
         print(f"Execution time: {(time.time() - start_time) * 1000:.2f} ms")
 
     fig = plt.figure()
